@@ -1,0 +1,210 @@
+function EncStore(user, url, keytimeout) {
+	this.user = user;
+	this.storeurl = url;
+	this.keytimeout = keytimeout;
+
+	var self = this;
+	var _data = {};
+	var _key;
+	var _key_hash;
+
+	var aes = new pidCrypt.AES.CBC();
+	var aes_opts = {nBits:256};
+	
+	this.load = function(success) {
+		$.getJSON(storeurl, {user:user, type:'obj'}, function(data, textStatus) { 
+			_data = data; 
+			success(data); 
+		});
+	};
+
+	this.get = function(id, cb) {
+		if(!id in _data) { cb(false); return; }
+		decryptJSON(_data[id], cb);
+	};
+
+	this.add = function(id, data, success) {
+		var text = JSON.stringify(data);
+		encryptText(text, function(enc) {
+			_data[id] = enc;
+			$.post(storeurl, {do:'store', user: user, name: id, data: enc}, function(resp, textStatus) {
+				if(resp['success']) { success(); return; }
+				alert('Error:'+ resp['msg']);
+			}, 'json');
+		});
+	};
+
+	this.del = function(id, success) {
+		this.getKey(function() {
+			if(this.testKey(true)) $.getJSON(storeurl, {user:user, do:'del', name:id}, success);
+		});
+	};
+
+	this.encryptText = function(text, fn) {
+		self.getKey(function() {
+			if(!self.testKey()) { self.getKey(arguments.callee, true); return; }
+			enc = aes.encryptText(text, _key, aes_opts);
+			this.setKeyHash();
+			fn(enc);
+		});
+	};
+
+	this.decryptJSON = function(cyphertext, fn, forcegetkey) {
+		self.getKey(function() {
+			text = aes.decryptText(cyphertext, _key, aes_opts);
+			try { var obj = JSON.parse(text); }
+			catch(SyntaxError) { self.getKey(arguments.callee, true); return; }
+			this.setKeyHash();
+			fn(obj);
+		}, forcegetkey);
+	};
+
+	this.getKey = function(fn, force) {
+		/* if(self._kt) { 
+			clearTimeout(self._kt); 
+			self._kt = setTimeout(function() { key = false; }, keytimeout);
+		} */
+		if(_key && !force) { fn(); return; }
+		var subfn = function() {
+			_key = $('#form-pw-pw').val();
+			// self._kt = setTimeout(function() { key = false; }, keytimeout);
+			$.modal.close();
+			fn();
+		};
+		$('#form-pw').modal({
+			minHeight: '80px',
+			minWidth: '100px',
+			position: ['8px','7px'],
+			onShow:function(dialog) { 
+				$('#form-pw-pw').select().focus().keypress(function(e) {
+					if(e.keyCode == 13) { // enter key
+						e.preventDefault();
+						subfn();
+					}
+				}); 
+				$('#form-pw-submit').click(subfn);
+			}, 
+		});
+	};
+
+	this.setKeyHash = function() {
+		_key_hash = pidCrypt.MD5(_key);
+	};
+
+	this.testKey = function(force) {
+		return (!(force || _key_hash) || pidCrypt.MD5(_key) == _key_hash);
+	};
+
+	return this;
+}
+
+$(function() {
+	var self = this;
+	var user = document.location.search.replace(/^\?(user=)?/, '');
+	var store = EncStore(user, 'store.php', 10*60);
+
+	this.appendEntry = function(name) {
+		var html =	'<div>' +
+					'<h3 rel="'+name+'">+ ' + name + '<span class="actions">' +
+					' <a href="#" class="action-edit"><span>Edit</span></a>' +
+					' <a href="#" class="action-del"><span>Delete</span></a>' +
+					'</span></h3>' +
+					'<div style="display:none;"/>' +
+					'</div>';
+		$('#entry-list').append(html);
+	}
+
+	this.renderObjTo = function(obj, container) {
+		var html = [];
+		$.each(obj, function(k,v) {
+			if(k == 'class') return true;
+			if(k == 'link') {
+				html.push('<a href="'+v+'">Website</a>');
+			} else if(k == 'pass' || k == 'password') {
+ 		  		html.push('<span class="key">'+k.charAt(0).toUpperCase() + k.substr(1) + ':</span> <input type="text" class="pw" value="'+v+'"/>');
+			} else {
+ 		  		html.push('<span class="key">'+k.charAt(0).toUpperCase() + k.substr(1) + ':</span> ' + v);
+			}
+		});
+		$(container).append(html.join('<br>'));
+	};
+
+	this.collectData = function(frm) {
+		var data = {};
+		$(frm).find('input, select, textarea').each(function() {
+			data[$(this).attr('name')] = $(this).val();
+		});
+		return data;
+	};
+
+	this.clearData = function(frm) {
+		$(frm).find('input, select, textarea').each(function () { $(this).val(''); });
+	}
+
+
+	/*
+	** Attach events
+	*/
+	// EVENT: Add item
+	$('#new-item-but').click(function() {
+		var data = self.collectData('#form-add');
+		var name = data['name']; delete data['name'];
+		var type = data['type']; delete data['type'];
+		store.add(name, data, function() {
+			self.appendEntry(name);
+			self.clearData('#form-add');
+			$('#add-entry').click(); // hide the entry form
+		});
+		return false;
+	});
+
+	// EVENT: Delete item
+	$('a.action-del').live('click', function(e) {
+		e.preventDefault();
+		var en = $(this).closest('div');
+		id = $(this).closest('h3').attr('rel');
+		if(!id) return false;
+		store.del(id, function() {
+			en.remove();
+		});
+		return false;
+	});
+
+	// EVENT: edit item
+	$('a.action-edit').live('click', function(e) {
+		e.preventDefault();
+		return false;
+	});
+
+	// EVENT: Expand/contract item
+	$('#entry-list h3').live('click', function(e) {
+		e.preventDefault();
+		if($(this).data('expanded')) { // Contract
+			var id = $(this).attr('rel');
+			$(this).data('expanded', false).blur().html("+"+$(this).html().substr(1)).siblings().eq(0).hide();
+			if(id) $(this).siblings().eq(0).contents().remove();
+		}
+		else { // Expand
+			var h3 = this;
+			var id = $(this).attr('rel');
+			$(h3).data('expanded', true).blur().html("-"+$(h3).html().substr(1));
+			// If it doesnt look like an entry, just display the contents.
+			if(!id) { $(h3).siblings().eq(0).show(); return; }
+			store.get(id, function(obj) {
+				self.renderObjTo(obj, $(h3).siblings().eq(0));
+				$(h3).siblings().eq(0).show().find('input.pw').focus().select().blur(function() { $(this).replaceWith('<span>******</span>'); });
+			});
+		}
+	});
+
+	/*
+	** Lets begin...
+	*/
+	document.title = document.title += ": " + user;
+	
+	store.load(function(data) {
+		$.each(data, function(i, val) {
+			self.appendEntry(i);
+		});
+	});
+});

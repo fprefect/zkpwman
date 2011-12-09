@@ -1,0 +1,42 @@
+<!doctype html>
+<html>
+<head>
+<title>PW</title>
+<link type="text/css" rel="stylesheet" href="style.css"/>
+<script type="text/javascript" src="js/all-min.js"></script>
+<script type="text/javascript" src="js/app.js"></script>
+</head>
+<body>
+<div style="display:none;" id="form-pw">
+	<p style="margin-top:0; margin-bottom:0.5em;">
+		Password<br/>
+		<input type="password" value="" id="form-pw-pw" style="margin-top:0.25em;"/>
+	</p>
+	<button class="simplemodal-close">Cancel</button>
+	<button id="form-pw-submit">Submit</button>
+</div>
+
+<div id="entry-list">
+	<div>
+		<h3 id="add-entry">+ Add Entry</h3>
+		<div id="form-add" style="display:none;">
+			<dl>
+				<dt><label for="new-item-name">Name:</label></dt>
+				<dd><input type="text" id="new-item-name" name="name" value="TEST"/></dd>
+				<dt><label for="new-item-link">Link:</label></dt>
+				<dd><input type="text" id="new-item-link" name="link" value="http://www.splitretina.com/"/></dd>
+				<dt><label for="new-item-class">Type:</label></dt>
+				<dd><select name="class" id="new-item-class"><option value="unp">Username/Password</option></select></dd>
+				<dt><label for="new-item-user">User:</label></dt>
+				<dd><input type="text" id="new-item-user" name="user" value="user"/></dd>
+				<dt><label for="new-item-pass">Password:</label></dt>
+				<dd><input type="text" id="new-item-pass" name="password" value="pass"/></dd>
+				<dt id="new-item-insert">&nbsp;</dt>
+				<dd><button id="new-item-but">Add Item</button></dd>
+			</dl>
+		</div>
+	</div>
+</div>
+
+</body>
+</html>
